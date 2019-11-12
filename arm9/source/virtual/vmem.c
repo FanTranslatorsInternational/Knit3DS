@@ -94,7 +94,7 @@ bool ReadVMemDir(VirtualFile* vfile, VirtualDir* vdir) { // uses a generic vdir 
         memcpy(vfile, templates + vdir->index, sizeof(VirtualFile));
         
         // process special flags
-        if (((vfile->flags & VFLAG_N3DS_EXT) && (IS_O3DS || IS_SIGHAX)) || // this is not on O3DS consoles and locked by sighax
+        if (((vfile->flags & VFLAG_N3DS_EXT) && (IS_O3DS || IS_UNLOCKED)) || // this is not on O3DS consoles and locked by sighax
             ((vfile->flags & VFLAG_OTP) && !(IS_UNLOCKED))   || // OTP still locked
             ((vfile->flags & VFLAG_BOOT9) && !(HAS_BOOT9))   || // boot9 not found
             ((vfile->flags & VFLAG_BOOT11) && !(HAS_BOOT11)) || // boot11 not found
@@ -165,8 +165,9 @@ int ReadVMemNVRAM(const VirtualFile* vfile, void* buffer, u64 offset, u64 count)
         wififlash_initialized = spiflash_get_status();
         if (!wififlash_initialized) return 1;
     }
-    
-    spiflash_read((u32) offset, (u32) count, buffer);
+
+    if (!spiflash_read((u32) offset, (u32) count, buffer))
+        return 1;
     return 0;
 }
 

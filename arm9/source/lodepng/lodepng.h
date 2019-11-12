@@ -39,6 +39,18 @@ compiler command to disable them without modifying this header, e.g.
 In addition to those below, you can also define LODEPNG_NO_COMPILE_CRC to
 allow implementing a custom lodepng_crc32.
 */
+
+#define LODEPNG_NO_COMPILE_CRC
+#define LODEPNG_NO_COMPILE_DISK
+#define LODEPNG_NO_COMPILE_ANCILLARY_CHUNKS
+#define LODEPNG_NO_COMPILE_ERROR_TEXT
+
+#include "crc32.h"
+static inline unsigned lodepng_crc32(const unsigned char *data, size_t length)
+{
+  return crc32_calculate(0xffffffffu, data, length) ^ 0xffffffffu;
+}
+
 /*deflate & zlib. If disabled, you must specify alternative zlib functions in
 the custom_zlib field of the compress and decompress settings*/
 #ifndef LODEPNG_NO_COMPILE_ZLIB
@@ -546,9 +558,6 @@ typedef enum LodePNGFilterStrategy
   LFS_ZERO,
   /*Use filter that gives minimum sum, as described in the official PNG filter heuristic.*/
   LFS_MINSUM,
-  /*Use the filter type that gives smallest Shannon entropy for this scanline. Depending
-  on the image, this is better or worse than minsum.*/
-  LFS_ENTROPY,
   /*
   Brute-force-search PNG filters by compressing each filter for each scanline.
   Experimental, very slow, and only rarely gives better compression than MINSUM.

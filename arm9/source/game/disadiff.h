@@ -33,7 +33,7 @@ typedef struct {
     u8  padding1[3];
     u8  hash_table[0x20]; // for the active table
     u8  unused[0x74];
-} __attribute__((packed)) DisaHeader;
+} PACKED_STRUCT DisaHeader;
 
 typedef struct {
     u8  magic[8]; // "DIFF" 0x00030000
@@ -46,7 +46,7 @@ typedef struct {
     u8  hash_table[0x20]; // for the active table
     u64 unique_id; // see: http://3dbrew.org/wiki/Extdata
     u8  unused[0xA4];
-} __attribute__((packed)) DiffHeader;
+} PACKED_STRUCT DiffHeader;
 
 typedef struct {
     u8  magic[8]; // "DIFI" 0x00010000
@@ -60,7 +60,7 @@ typedef struct {
     u8  dpfs_lvl1_selector;
     u8  padding[2];
     u64 ivfc_offset_extlvl4;
-} __attribute__((packed)) DifiHeader;
+} PACKED_STRUCT DifiHeader;
 
 typedef struct {
     u8  magic[8]; // "IVFC" 0x00020000
@@ -81,7 +81,7 @@ typedef struct {
     u64 size_lvl4;
     u64 log_lvl4;
     u64 size_ivfc; // 0x78
-} __attribute__((packed)) IvfcDescriptor;
+} PACKED_STRUCT IvfcDescriptor;
 
 typedef struct {
     u8  magic[8]; // "DPFS" 0x00010000
@@ -97,7 +97,7 @@ typedef struct {
     u64 size_lvl3;
     u32 log_lvl3;
     u8  padding2[4];
-} __attribute__((packed)) DpfsDescriptor;
+} PACKED_STRUCT DpfsDescriptor;
 
 typedef struct {
     DifiHeader difi;
@@ -105,10 +105,15 @@ typedef struct {
     DpfsDescriptor dpfs;
     u8 hash[0x20];
     u8 padding[4]; // all zeroes when encrypted
-} __attribute__((packed)) DifiStruct;
+} PACKED_STRUCT DifiStruct;
 
-// condensed info to enable reading IVFC lvl4
+// condensed info to enable reading/writing IVFC lvl4
 typedef struct {
+    u32 offset_table;
+    u32 size_table;
+    u32 offset_partition_hash;
+    u32 offset_difi;
+    u32 offset_master_hash; // relative to start of difi
     u32 offset_dpfs_lvl1; // relative to start of file
     u32 offset_dpfs_lvl2; // relative to start of file
     u32 offset_dpfs_lvl3; // relative to start of file
@@ -117,13 +122,26 @@ typedef struct {
     u32 size_dpfs_lvl3;
     u32 log_dpfs_lvl2;
     u32 log_dpfs_lvl3;
+    u32 log_ivfc_lvl1;
+    u32 log_ivfc_lvl2;
+    u32 log_ivfc_lvl3;
+    u32 log_ivfc_lvl4;
+    u32 offset_ivfc_lvl1; // relative to DPFS lvl3
+    u32 offset_ivfc_lvl2; // relative to DPFS lvl3
+    u32 offset_ivfc_lvl3; // relative to DPFS lvl3
     u32 offset_ivfc_lvl4; // relative to DPFS lvl3 if not external
+    u32 size_ivfc_lvl1;
+    u32 size_ivfc_lvl2;
+    u32 size_ivfc_lvl3;
     u32 size_ivfc_lvl4;
     u8  dpfs_lvl1_selector;
     u8  ivfc_use_extlvl4;
     u8* dpfs_lvl2_cache; // optional, NULL when unused
-} __attribute__((packed)) DisaDiffReaderInfo;
+} __attribute__((packed)) DisaDiffRWInfo;
 
-u32 GetDisaDiffReaderInfo(const char* path, DisaDiffReaderInfo* info, bool partitionB);
-u32 BuildDisaDiffDpfsLvl2Cache(const char* path, DisaDiffReaderInfo* info, u8* cache, u32 cache_size);
-u32 ReadDisaDiffIvfcLvl4(const char* path, DisaDiffReaderInfo* info, u32 offset, u32 size, void* buffer);
+u32 GetDisaDiffRWInfo(const char* path, DisaDiffRWInfo* info, bool partitionB);
+u32 BuildDisaDiffDpfsLvl2Cache(const char* path, const DisaDiffRWInfo* info, u8* cache, u32 cache_size);
+u32 ReadDisaDiffIvfcLvl4(const char* path, const DisaDiffRWInfo* info, u32 offset, u32 size, void* buffer);
+u32 WriteDisaDiffIvfcLvl4(const char* path, const DisaDiffRWInfo* info, u32 offset, u32 size, const void* buffer);
+// Not intended for external use other than vdisadiff
+u32 FixDisaDiffIvfcLevel(const DisaDiffRWInfo* info, u32 level, u32 offset, u32 size, u32* next_offset, u32* next_size);

@@ -17,7 +17,7 @@ typedef struct {
     u32 subtype;
     u32 index;
     u32 flags;
-} __attribute__((packed)) VirtualNandTemplate;
+} PACKED_STRUCT VirtualNandTemplate;
 
 // see NP_TYPE_ and NP_SUBTYPE_ in nand.h
 static const VirtualNandTemplate vNandTemplates[] = {
@@ -93,7 +93,7 @@ bool ReadVNandDir(VirtualFile* vfile, VirtualDir* vdir) { // uses a generic vdir
         }
         if (vfile->flags & VFLAG_KEYDB) {
             const u8 perfect_sha[] = { KEYDB_PERFECT_HASH };
-            u8 keydb[KEYDB_PERFECT_SIZE];
+            u8 keydb[KEYDB_PERFECT_SIZE] __attribute__((aligned(4)));
             ReadNandBytes(keydb, vfile->offset, KEYDB_PERFECT_SIZE, vfile->keyslot, nand_src);
             if (sha_cmp(perfect_sha, keydb, KEYDB_PERFECT_SIZE, SHA256_MODE) != 0) continue;
             vfile->size = KEYDB_PERFECT_SIZE;

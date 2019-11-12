@@ -4,8 +4,7 @@
 #include "fsdir.h"
 
 #define NORM_FS  10
-#define IMGN_FS  3 // image normal filesystems 
-#define VIRT_FS  12
+#define IMGN_FS  3 // image normal filesystems
 
 // primary drive types
 #define DRV_UNKNOWN     (0<<0)
@@ -29,19 +28,21 @@
 #define DRV_SEARCH      (1UL<<16)
 #define DRV_STDFAT      (1UL<<17) // standard FAT drive without limitations
 
+#define DRV_LABEL_LEN   (36)
+
 #define FS_DRVNAME \
         "SDCARD", \
         "SYSNAND CTRNAND", "SYSNAND TWLN", "SYSNAND TWLP", "SYSNAND SD", "SYSNAND VIRTUAL", \
         "EMUNAND CTRNAND", "EMUNAND TWLN", "EMUNAND TWLP", "EMUNAND SD", "EMUNAND VIRTUAL", \
         "IMGNAND CTRNAND", "IMGNAND TWLN", "IMGNAND TWLP", "IMGNAND VIRTUAL", \
         "GAMECART", \
-        "GAME IMAGE", "AESKEYDB IMAGE", "TICKET.DB IMAGE", \
+        "GAME IMAGE", "AESKEYDB IMAGE", "TICKET.DB IMAGE", "DISA/DIFF IMAGE", \
         "MEMORY VIRTUAL", \
         "VRAM VIRTUAL", \
         "LAST SEARCH" \
         
 #define FS_DRVNUM \
-    "0:", "1:", "2:", "3:", "A:", "S:", "4:", "5:", "6:", "B:", "E:", "7:", "8:", "9:", "I:", "C:", "G:", "K:", "T:", "M:", "V:", "Z:"
+    "0:", "1:", "2:", "3:", "A:", "S:", "4:", "5:", "6:", "B:", "E:", "7:", "8:", "9:", "I:", "C:", "G:", "K:", "T:", "D:", "M:", "V:", "Z:"
 
 /** Function to identify the type of a drive **/
 int DriveType(const char* path);

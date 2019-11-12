@@ -18,21 +18,7 @@
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdbool.h>
 #include "types.h"
-
-
-#define I2C_STOP          (1u)
-#define I2C_START         (1u<<1)
-#define I2C_ERROR         (1u<<2)
-#define I2C_ACK           (1u<<4)
-#define I2C_DIRE_WRITE    (0u)
-#define I2C_DIRE_READ     (1u<<5)
-#define I2C_IRQ_ENABLE    (1u<<6)
-#define I2C_ENABLE        (1u<<7)
-
-#define I2C_GET_ACK(reg)  ((bool)((reg)>>4 & 1u))
-
 
 typedef enum
 {
@@ -48,13 +34,6 @@ typedef enum
 	I2C_DEV_QTM       = 16,
 	I2C_DEV_N3DS_HID  = 17
 } I2cDevice;
-
-
-
-/**
- * @brief      Initializes the I2C buses. Call this only once.
- */
-void I2C_init(void);
 
 /**
  * @brief      Reads data from a I2C register to a buffer.

@@ -120,7 +120,7 @@ u32 EmbedEssentialBackup(const char* path) {
     
     // leaving out the write permissions check here, it's okay
     if ((BuildEssentialBackup(path, essential) != 0) ||
-        (ValidateNandNcsdHeader((NandNcsdHeader*) essential->nand_hdr) != 0) ||
+        (ValidateNandNcsdHeader((void*)essential->nand_hdr) != 0) ||
         (fvx_qwrite(path, essential, SECTOR_D0K3 * 0x200, sizeof(EssentialBackup), NULL) != FR_OK)) {
         free(essential);
         return 1;
@@ -197,21 +197,27 @@ u32 InjectGbaVcSavegameBuffered(const char* path, const char* path_vcsave, void*
     
     // fix CMAC for NAND partition, rewrite AGBSAVE file
     u32 data_size = sizeof(AgbSaveHeader) + agbsave->save_size;
+    agbsave->times_saved++; // (for compatibility with dual SD save injection)
     if (FixAgbSaveCmac(agbsave, NULL, NULL) != 0) return 1;
     if (fvx_qwrite(path, agbsave, 0, data_size, NULL) != FR_OK) return 1; // write fail
     
     // fix CMAC for SD partition, take it over to SD
     if (strncasecmp(path, "S:/agbsave.bin", 256) == 0) {
         char path_sd[64];
+        u32 slot;
+        // get the SD save path, check SD save size
         snprintf(path_sd, 64, "A:/title/%08lx/%08lx/data/00000001.sav",
             getle32((u8*) &(agbsave->title_id) + 4), getle32((u8*) &(agbsave->title_id)));
-        if (FixAgbSaveCmac(agbsave, NULL, path_sd) != 0) return 1;
-        
-        // check SD save size, then write both partitions
         if ((fvx_stat(path_sd, &fno) != FR_OK) || (fno.fsize != max(AGBSAVE_MAX_SIZE, 2 * data_size)))
             return 1; // invalid / non-existant SD save
-        if (fvx_qwrite(path_sd, agbsave, 0, data_size, NULL) != FR_OK) return 1; // write fail (#0)
-        if (fvx_qwrite(path_sd, agbsave, data_size, data_size, NULL) != FR_OK) return 1; // write fail (#1)
+        // inject current slot
+        slot = (agbsave->times_saved % 2) ? 0 : data_size;
+        if (FixAgbSaveCmac(agbsave, NULL, path_sd) != 0) return 1;
+        if (fvx_qwrite(path_sd, agbsave, slot, data_size, NULL) != FR_OK) return 1; // write fail (#0)
+        // inject backup (previous) slot
+        slot = ((--(agbsave->times_saved)) % 2) ? 0 : data_size;
+        if (FixAgbSaveCmac(agbsave, NULL, path_sd) != 0) return 1;
+        if (fvx_qwrite(path_sd, agbsave, slot, data_size, NULL) != FR_OK) return 1; // write fail (#1)
     }
     
     // set CFG_BOOTENV to 0x7 so the save is taken over (not needed anymore)
@@ -387,8 +393,8 @@ u32 SafeRestoreNandDump(const char* path) {
     if ((ValidateNandDump(path) != 0) && // NAND dump validation
         !ShowPrompt(true, "Error: NAND dump is corrupt.\nStill continue?"))
         return 1;
-    if (!IS_A9LH) {
-        ShowPrompt(false, "Error: B9S/A9LH not detected.");
+    if (!IS_UNLOCKED) {
+        ShowPrompt(false, "Error: System is locked.");
         return 1;
     }
     if (fvx_stat("S:/essential.exefs", NULL) != FR_OK) {
@@ -510,8 +516,6 @@ u32 SafeInstallFirmBuffered(const char* path, u32 slots, u8* buffer, u32 bufsiz)
     
     // check install slots
     for (u32 s = 0; s < 8; s++) {
-        u8 firm_magic[] = { FIRM_MAGIC };
-        u8 lmagic[sizeof(firm_magic)];
         NandPartitionInfo info;
         if (!((slots>>s)&0x1)) continue;
         if ((GetNandPartitionInfo(&info, NP_TYPE_FIRM, NP_SUBTYPE_CTR, s, NAND_SYSNAND) != 0) ||
@@ -519,15 +523,10 @@ u32 SafeInstallFirmBuffered(const char* path, u32 slots, u8* buffer, u32 bufsiz)
             ShowPrompt(false, "%s\nFIRM%lu not found or too small.", pathstr, s);
             return 1;
         }
-        if ((ReadNandBytes(lmagic, info.sector*0x200, sizeof(firm_magic), info.keyslot, NAND_SYSNAND) != 0) ||
-            (memcmp(lmagic, firm_magic, sizeof(firm_magic)) != 0)) {
-            ShowPrompt(false, "%s\nFIRM%lu crypto fail.", pathstr, s);
-            return 1;
-        }
     }
     
     // check sector 0x96 on N3DS, offer fix if required
-    u8 sector0x96[0x200];
+    u8 sector0x96[0x200] __attribute__((aligned(4)));
     bool fix_sector0x96 = false;
     ReadNandSectors(sector0x96, 0x96, 1, 0x11, NAND_SYSNAND);
     if (!IS_O3DS && !CheckSector0x96Crypto()) {
@@ -605,7 +604,7 @@ u32 SafeInstallFirm(const char* path, u32 slots) {
 
 u32 SafeInstallKeyDb(const char* path) {
     const u8 perfect_sha[] = { KEYDB_PERFECT_HASH };
-    u8 keydb[KEYDB_PERFECT_SIZE];
+    u8 keydb[KEYDB_PERFECT_SIZE] __attribute__((aligned(4)));
     
     char pathstr[32 + 1]; // truncated path string
     TruncateString(pathstr, path, 32, 8);

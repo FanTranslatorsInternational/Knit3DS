@@ -12,9 +12,11 @@
 #include "sha.h"
 #include "hid.h"
 #include "ui.h"
+#include "swkbd.h"
 #include "png.h"
 #include "ips.h"
 #include "bps.h"
+#include "pxi.h"
 
 
 #define _MAX_ARGS       4
@@ -163,7 +165,7 @@ Gm9ScriptCmd cmd_list[] = {
     { CMD_ID_CP      , "cp"      , 2, _FLG('h') | _FLG('w') | _FLG('k') | _FLG('s') | _FLG('n') | _FLG('p')},
     { CMD_ID_MV      , "mv"      , 2, _FLG('w') | _FLG('k') | _FLG('s') | _FLG('n') },
     { CMD_ID_INJECT  , "inject"  , 2, _FLG('n') },
-    { CMD_ID_FILL    , "fill"    , 2, 0 },
+    { CMD_ID_FILL    , "fill"    , 2, _FLG('n') },
     { CMD_ID_FDUMMY  , "fdummy"  , 2, 0 },
     { CMD_ID_RM      , "rm"      , 1, 0 },
     { CMD_ID_MKDIR   , "mkdir"   , 1, 0 },
@@ -340,17 +342,17 @@ void set_preview(const char* name, const char* content) {
         else if (strncasecmp(content, "full", _VAR_CNT_LEN) == 0) preview_mode = 2;
         else preview_mode = 0xFF; // unknown preview mode
     } else if (strncmp(name, "PREVIEW_COLOR_ACTIVE", _VAR_NAME_LEN) == 0) {
-        u8 rgb[4] = { 0 };
+        u8 rgb[4];
         if (strntohex(content, rgb, 3))
-            script_color_active = getle32(rgb);
+            script_color_active = rgb888_buf_to_rgb565(rgb);
     } else if (strncmp(name, "PREVIEW_COLOR_COMMENT", _VAR_NAME_LEN) == 0) {
-        u8 rgb[4] = { 0 };
+        u8 rgb[4];
         if (strntohex(content, rgb, 3))
-            script_color_comment = getle32(rgb);
+            script_color_comment = rgb888_buf_to_rgb565(rgb);
     } else if (strncmp(name, "PREVIEW_COLOR_CODE", _VAR_NAME_LEN) == 0) {
-        u8 rgb[4] = { 0 };
+        u8 rgb[4];
         if (strntohex(content, rgb, 3))
-            script_color_code = getle32(rgb);
+            script_color_code = rgb888_buf_to_rgb565(rgb);
     }
 }
 
@@ -402,7 +404,7 @@ void upd_var(const char* name) {
         if (!name || (strncmp(name, env_id0_name, _VAR_NAME_LEN) == 0)) {
             const char* path = emu ? "4:/private/movable.sed" : "1:/private/movable.sed";
             char env_id0[32+1];
-            u8 sd_keyy[0x10];
+            u8 sd_keyy[0x10] __attribute__((aligned(4)));
             if (FileGetData(path, sd_keyy, 0x10, 0x110) == 0x10) {
                 u32 sha256sum[8];
                 sha_quick(sha256sum, sd_keyy, 0x10, SHA256_MODE);
@@ -482,7 +484,7 @@ bool init_vars(const char* path_script) {
     set_var("NULL", ""); // this one is special and should not be changed later 
     set_var("CURRDIR", curr_dir); // script path, never changes
     set_var("GM9OUT", OUTPUT_PATH); // output path, never changes
-    set_var("HAX", IS_SIGHAX ? (isntrboot() ? "ntrboot" : "sighax") : IS_A9LH ? "a9lh" : ""); // type of hax running from
+    set_var("HAX", IS_UNLOCKED ? (isntrboot() ? "ntrboot" : "sighax") : ""); // type of hax running from
     set_var("ONTYPE", IS_O3DS ? "O3DS" : "N3DS"); // type of the console
     set_var("RDTYPE", IS_DEVKIT ? "devkit" : "retail"); // devkit / retail
     char* ptr = set_var("GM9VER", VERSION); // GodMode9 version, truncated below
@@ -1012,7 +1014,7 @@ bool run_cmd(cmd_id id, u32 flags, char** argv, char* err_str) {
         char* var = get_var(argv[1], NULL);
         strncpy(input, var, _VAR_CNT_LEN);
         input[_VAR_CNT_LEN - 1] = '\0';
-        ret = ShowStringPrompt(input, _VAR_CNT_LEN, "%s", argv[0]);
+        ret = ShowKeyboardOrPrompt(input, _VAR_CNT_LEN, "%s", argv[0]);
         if (ret) set_var(argv[1], "");
         if (err_str) snprintf(err_str, _ERR_STR_LEN, "user abort");
         if (ret) {
@@ -1142,6 +1144,7 @@ bool run_cmd(cmd_id id, u32 flags, char** argv, char* err_str) {
     }
     else if (id == CMD_ID_FILL) {
         u32 flags_ext = ALLOW_EXPAND;
+        if (flags & _FLG('n')) flags_ext |= NO_CANCEL;
         u8 fillbyte = 0;
         if ((strnlen(argv[1], _ARG_MAX_LEN) != 2) || !strntohex(argv[1], &fillbyte, 1)) {
             ret = false;
@@ -1311,7 +1314,7 @@ bool run_cmd(cmd_id id, u32 flags, char** argv, char* err_str) {
         if (err_str) snprintf(err_str, _ERR_STR_LEN, "encrypt failed");
     }
     else if (id == CMD_ID_BUILDCIA) {
-        ret = (BuildCiaFromGameFile(argv[0], (flags & _FLG('n'))) == 0);
+        ret = (BuildCiaFromGameFile(argv[0], (flags & _FLG('l'))) == 0);
         if (err_str) snprintf(err_str, _ERR_STR_LEN, "build CIA failed");
     }
     else if (id == CMD_ID_EXTRCODE) {
@@ -1405,6 +1408,8 @@ bool run_cmd(cmd_id id, u32 flags, char** argv, char* err_str) {
                     snprintf(fixpath, 256, "%s%s", (*argv[0] == '0') ? "sdmc" : "nand", argv[0] + 1);
                 else strncpy(fixpath, argv[0], 256);
                 fixpath[255] = '\0';
+                PXI_DoCMD(PXI_SET_VMODE, (u32[]){1}, 1);
+                PXI_DoCMD(PXI_LEGACY_MODE, NULL, 0);
                 BootFirm((FirmHeader*)(void*)firm, fixpath);
                 while(1);
             } else if (err_str) snprintf(err_str, _ERR_STR_LEN, "not a bootable firm");
@@ -1840,7 +1845,7 @@ bool ExecuteGM9Script(const char* path_script) {
                 if (preview_mode > 2) {
                     char* preview_str = get_var("PREVIEW_MODE", NULL);
                     u32 bitmap_width, bitmap_height;
-                    u8* bitmap = NULL;
+                    u16* bitmap = NULL;
 
                     u8* png = (u8*) malloc(SCREEN_SIZE_TOP);
                     if (png) {
@@ -1853,7 +1858,7 @@ bool ExecuteGM9Script(const char* path_script) {
                     if (bitmap) {
                         DrawBitmap(TOP_SCREEN, -1, -1, bitmap_width, bitmap_height, bitmap);
                         free(bitmap);
-                    } else {
+                    } else if (ShowGameFileTitleInfoF(preview_str, TOP_SCREEN, false) != 0) {
                         if (strncmp(preview_str, "off", _VAR_CNT_LEN) == 0) preview_str = "(preview disabled)";
                         DrawStringCenter(TOP_SCREEN, COLOR_STD_FONT, COLOR_STD_BG, "%s", preview_str);
                     }

@@ -24,6 +24,16 @@ bool CheckWritePermissions(const char* path) {
     int drvtype = DriveType(path);
     u32 perm;
     
+    // create a standardized path string
+    char path_f[256];
+    char* p = (char*) path;
+    path_f[255] = '\0';
+    for (u32 i = 0; i < 255; i++) {
+        path_f[i] = *(p++);
+        while ((path_f[i] == '/') && (*p == '/')) p++;
+        if (!path_f[i]) break;
+    }
+
     // check mounted image write permissions
     if ((drvtype & DRV_IMAGE) && !CheckWritePermissions(GetMountPath()))
         return false; // endless loop when mounted file inside image, but not possible
@@ -43,13 +53,13 @@ bool CheckWritePermissions(const char* path) {
             const char* path_lvl2[] = { PATH_SYS_LVL2 };
             const char* path_lvl1[] = { PATH_SYS_LVL1 };
             for (u32 i = 0; (i < sizeof(path_lvl3) / sizeof(char*)) && (lvl < 3); i++)
-                if (strncasecmp(path, path_lvl3[i], 256) == 0) lvl = 3;
+                if (strncasecmp(path_f, path_lvl3[i], 256) == 0) lvl = 3;
             for (u32 i = 0; (i < sizeof(path_lvl2) / sizeof(char*)) && (lvl < 2); i++)
-                if (strncasecmp(path, path_lvl2[i], 256) == 0) lvl = 2;
+                if (strncasecmp(path_f, path_lvl2[i], 256) == 0) lvl = 2;
             for (u32 i = 0; (i < sizeof(path_lvl1) / sizeof(char*)) && (lvl < 1); i++)
-                if (strncasecmp(path, path_lvl1[i], 256) == 0) lvl = 1;
+                if (strncasecmp(path_f, path_lvl1[i], 256) == 0) lvl = 1;
         }
-        if (!IS_A9LH) { // changed SysNAND permission levels on non-A9LH
+        if (!IS_UNLOCKED) { // changed SysNAND permission levels on locked systems
             if ((drvtype & DRV_CTRNAND) || (lvl == 2)) lvl = 3;
         }
         perm = perms[lvl];
@@ -60,7 +70,7 @@ bool CheckWritePermissions(const char* path) {
         if (drvtype & DRV_VIRTUAL) { // check for paths
             const char* path_lvl1[] = { PATH_EMU_LVL1 };
             for (u32 i = 0; (i < sizeof(path_lvl1) / sizeof(char*)) && (lvl < 1); i++)
-                if (strncasecmp(path, path_lvl1[i], 256) == 0) lvl = 1;
+                if (strncasecmp(path_f, path_lvl1[i], 256) == 0) lvl = 1;
         }
         perm = perms[lvl];
         snprintf(area_name, 16, "EmuNAND (lvl%lu)", lvl);
@@ -69,7 +79,7 @@ bool CheckWritePermissions(const char* path) {
         snprintf(area_name, 16, "game images");
     } else if (drvtype & DRV_CART) {
         perm = PERM_CART;
-        snprintf(area_name, 16, "gamecarts");
+        snprintf(area_name, 16, "gamecart saves");
     } else if (drvtype & DRV_VRAM) {
         perm = PERM_VRAM;
         snprintf(area_name, 16, "vram0");
@@ -82,7 +92,7 @@ bool CheckWritePermissions(const char* path) {
     } else if (drvtype & DRV_MEMORY) {
         perm = PERM_MEMORY;
         snprintf(area_name, 16, "memory areas");
-    } else if (strncasecmp(path, "0:/Nintendo 3DS", 15) == 0) { // this check could be better
+    } else if (strncasecmp(path_f, "0:/Nintendo 3DS", 15) == 0) { // this check could be better
         perm = PERM_SDDATA;
         snprintf(area_name, 16, "SD system data");
     } else if (drvtype & DRV_SDCARD) {
@@ -100,7 +110,7 @@ bool CheckWritePermissions(const char* path) {
         return true;
     
     // offer unlock if possible
-    if (!(perm & (PERM_VRAM|PERM_CART|PERM_GAME|PERM_XORPAD))) {
+    if (!(perm & (PERM_VRAM|PERM_GAME|PERM_XORPAD))) {
         // ask the user
         if (!ShowPrompt(true, "Writing to %s is locked!\nUnlock it now?", area_name))
             return false;
@@ -169,6 +179,10 @@ bool SetWritePermissions(u32 perm, bool add_perm) {
             if (!ShowUnlockSequence(2, "You want to enable SD data\nwriting permissions.\n \nThis enables you to modify\ninstallations, user data &\nsavegames."))
                 return false;
             break;
+        case PERM_CART:
+            if (!ShowUnlockSequence(2, "You want to enable gamecart\nsave writing permissions."))
+                return false;
+            break;
         #ifndef SAFEMODE
         case PERM_SYS_LVL2:
             if (!ShowUnlockSequence(3, "!Better be careful!\n \nYou want to enable SysNAND\nlvl2 writing permissions.\n \nThis enables you to modify\nirrecoverable system data!"))
@@ -179,7 +193,7 @@ bool SetWritePermissions(u32 perm, bool add_perm) {
                 return false;
             break;
         case PERM_SYS_LVL3:
-            if (!ShowUnlockSequence(6, "!THIS IS YOUR ONLY WARNING!\n \nYou want to enable SysNAND\nlvl3 writing permissions.\n \nThis enables you to OVERWRITE\n%s", IS_SIGHAX ? "your B9S installation and/or\nBRICK your console!" : IS_A9LH ? "your A9LH installation and/or\nBRICK your console!" : "essential system files and/or\nBRICK your console!"))
+            if (!ShowUnlockSequence(6, "!THIS IS YOUR ONLY WARNING!\n \nYou want to enable SysNAND\nlvl3 writing permissions.\n \nThis enables you to OVERWRITE\nyour bootloader installation,\nessential system files and/or\nBRICK your console!"))
                 return false;
             break;
         default:

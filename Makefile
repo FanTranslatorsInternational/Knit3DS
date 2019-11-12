@@ -13,6 +13,7 @@ export DBUILTL  :=	$(shell date +'%Y-%m-%d %H:%M:%S')
 
 export OUTDIR := output
 export RELDIR := release
+export COMMON_DIR := ../common
 
 # Definitions for initial RAM disk
 VRAM_OUT    := $(OUTDIR)/vram0.tar
@@ -30,8 +31,8 @@ export INCLUDE := -I"$(shell pwd)/common"
 
 export ASFLAGS := -g -x assembler-with-cpp $(INCLUDE)
 export CFLAGS  := -DDBUILTS="\"$(DBUILTS)\"" -DDBUILTL="\"$(DBUILTL)\"" -DVERSION="\"$(VERSION)\"" -DFLAVOR="\"$(FLAVOR)\"" \
-                  -g -O2 -Wall -Wextra -Wpedantic -Wcast-align -Wformat=2 -Wno-main \
-                  -fomit-frame-pointer -ffast-math -std=gnu11 \
+                  -g -Os -Wall -Wextra -Wcast-align -Wformat=2 -Wno-main \
+                  -fomit-frame-pointer -ffast-math -std=gnu11 -MMD -MP \
                   -Wno-unused-function -Wno-format-truncation $(INCLUDE) -ffunction-sections -fdata-sections
 export LDFLAGS := -Tlink.ld -nostartfiles -Wl,--gc-sections,-z,max-page-size=512
 ELF := arm9/arm9.elf arm11/arm11.elf
@@ -45,7 +46,10 @@ clean:
 	done
 	@rm -rf $(OUTDIR) $(RELDIR) $(FIRM) $(FIRMD) $(VRAM_OUT)
 
-release: clean
+unmarked_readme: .FORCE
+	@$(PY3) utils/unmark.py -f README.md data/README_internal.md
+
+release: clean unmarked_readme
 	@$(MAKE) --no-print-directory firm
 	@$(MAKE) --no-print-directory firm NTRBOOT=1
 
@@ -85,8 +89,8 @@ firm: $(ELF) vram0
 	@echo "[VERSION] $(VERSION)"
 	@echo "[BUILD] $(DBUILTL)"
 	@echo "[FIRM] $(FIRM)"
-	@firmtool build $(FIRM) $(FTFLAGS) -g -A 0x18000000 -D $(ELF) $(VRAM_OUT) -C NDMA XDMA memcpy
+	@$(PY3) -m firmtool build $(FIRM) $(FTFLAGS) -g -A 0x18000000 -D $(ELF) $(VRAM_OUT) -C NDMA XDMA memcpy
 	@echo "[FIRM] $(FIRMD)"
-	@firmtool build $(FIRMD) $(FTDFLAGS) -g -A 0x18000000 -D $(ELF) $(VRAM_OUT)  -C NDMA XDMA memcpy
+	@$(PY3) -m firmtool build $(FIRMD) $(FTDFLAGS) -g -A 0x18000000 -D $(ELF) $(VRAM_OUT)  -C NDMA XDMA memcpy
 
 .FORCE:

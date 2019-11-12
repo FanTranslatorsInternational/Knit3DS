@@ -6,10 +6,18 @@
 #endif
 #endif
 
+#define BIT(x) (1 << (x))
+
+#ifndef __ASSEMBLER__
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 
-#define BIT(x) (1<<(x))
+#define ALIGN(n)        __attribute__((aligned(n)))
+#define PACKED_ALIGN(n) __attribute__((packed, aligned(n)))
+#define PACKED_STRUCT   PACKED_ALIGN(4)
+
+#define asm_v asm __volatile__
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -30,3 +38,4 @@ typedef volatile s8  vs8;
 typedef volatile s16 vs16;
 typedef volatile s32 vs32;
 typedef volatile s64 vs64;
+#endif

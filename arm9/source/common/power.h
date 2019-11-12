@@ -2,7 +2,11 @@
 
 #include "common.h"
 
-void CheckBrightness();
+#define BRIGHTNESS_AUTOMATIC (-1)
+#define BRIGHTNESS_MIN (10)
+#define BRIGHTNESS_MAX (210)
+
+u32 SetScreenBrightness(int level);
 u32 GetBatteryPercent();
 bool IsCharging();
 void Reboot();

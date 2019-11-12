@@ -13,7 +13,7 @@
                               (v == 0x0003) ? 0x1240 : (v == 0x0103) ? 0x23C0 : 0x0000)
 #define TWLICON_SIZE_DESC   128
 #define TWLICON_DIM_ICON    32
-#define TWLICON_SIZE_ICON   (TWLICON_DIM_ICON * TWLICON_DIM_ICON * 3) // w * h * bpp (rgb888)
+#define TWLICON_SIZE_ICON   (TWLICON_DIM_ICON * TWLICON_DIM_ICON * 2) // w * h * bpp (rgb565)
 #define NDS_LOGO_CRC16      0xCF56
 
 #define TWL_UNITCODE_NTR    0x00
@@ -45,7 +45,7 @@ typedef struct {
     u8  icon_anim[0x200 * 0x8]; // 32x32x4bpp / 8 frames
     u16 palette_anim[0x10 * 0x8]; // 8 frames
     u16 sequence_anim[0x40];
-} __attribute__((packed)) TwlIconData;
+} PACKED_STRUCT TwlIconData;
 
 // very limited, information taken from here:
 // https://github.com/devkitPro/ndstool/blob/dsi-support/source/header.h
@@ -121,12 +121,12 @@ typedef struct {
     u8  reserved3[176];
     u8  unknown3[0x10];
     u8  ignored4[0xD00]; // ignored
-} __attribute__((packed)) TwlHeader;
+} PACKED_STRUCT TwlHeader;
 
 u32 ValidateTwlHeader(TwlHeader* twl);
 u32 LoadTwlMetaData(const char* path, TwlHeader* hdr, TwlIconData* icon);
 u32 GetTwlTitle(char* desc, const TwlIconData* twl_icon);
-u32 GetTwlIcon(u8* icon, const TwlIconData* twl_icon);
+u32 GetTwlIcon(u16* icon, const TwlIconData* twl_icon);
 
 u32 FindNitroRomDir(u32 dirid, u32* fileid, u8** fnt_entry, TwlHeader* hdr, u8* fnt, u8* fat);
 u32 NextNitroRomEntry(u32* fileid, u8** fnt_entry);

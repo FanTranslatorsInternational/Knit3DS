@@ -1,4 +1,5 @@
 # Object files
+*.d
 *.o
 *.ko
 *.obj
@@ -39,8 +40,12 @@ desktop.ini
 *.sublime-*
 
 # Build directories
+/build
 /output
 /release
+
+# Build leftovers
+/data/README_internal.md
 
 # User additions
 /data/aeskeydb.bin

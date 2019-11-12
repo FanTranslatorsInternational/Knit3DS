@@ -1,5 +1,4 @@
 #pragma once
-
 /*
  *   This file is part of fastboot 3DS
  *   Copyright (C) 2017 derrek, profi200
@@ -20,13 +19,12 @@
 
 #include "common.h"
 
+#include "arm.h"
+#include "pxi.h"
 
-#define NVRAM_SIZE  0x20000 // 1 Mbit (128kiB)  
-#define SPIFLASH_CMD_RDSR  (0x05)
-#define SPIFLASH_CMD_READ  (0x03)
-
-
+#define NVRAM_SIZE  0x20000 // 1 Mbit (128kiB)
 
 // true if spiflash is installed, false otherwise
-bool spiflash_get_status();
-void spiflash_read(u32 offset, u32 size, u8 *buf);
+bool spiflash_get_status(void);
+
+bool spiflash_read(u32 offset, u32 size, u8 *buf);

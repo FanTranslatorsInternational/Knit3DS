@@ -24,13 +24,13 @@ typedef struct {
     u8  ticket_id[8];
     u8  console_id[4];
     u8  eshop_id[4];
-} __attribute__((packed)) TickDbEntry;
+} PACKED_STRUCT TickDbEntry;
 
 typedef struct {
     u32 n_entries;
     u8  reserved[12];
     TickDbEntry entries[256]; // this number is only a placeholder (dangerous?)
-} __attribute__((packed)) TickDbInfo;
+} PACKED_STRUCT TickDbInfo;
 
 // only for the main directory
 static const VirtualFile vTickDbFileTemplates[] = {
@@ -43,7 +43,7 @@ static const VirtualFile vTickDbFileTemplates[] = {
 
 static TickDbInfo* tick_info = NULL;
 static u8* lvl2_cache = NULL;
-static DisaDiffReaderInfo diff_info;
+static DisaDiffRWInfo diff_info;
 static bool scanned_raw = false;
 
 
@@ -113,8 +113,8 @@ void ScanTickDb(bool raw_mode, bool replace) {
 }
 
 void DeinitVTickDbDrive(void) {
-    if (tick_info) free(tick_info);
-    if (lvl2_cache) free(lvl2_cache);
+    free(tick_info);
+    free(lvl2_cache);
     tick_info = NULL;
     lvl2_cache = NULL;
     scanned_raw = false;
@@ -130,7 +130,7 @@ u64 InitVTickDbDrive(void) { // prerequisite: ticket.db mounted as image
     memset(tick_info, 0, 16);
     
     // setup DIFF reading
-    if ((GetDisaDiffReaderInfo(NULL, &diff_info, false) != 0) ||
+    if ((GetDisaDiffRWInfo(NULL, &diff_info, false) != 0) ||
         !(lvl2_cache = (u8*) malloc(diff_info.size_dpfs_lvl2)) ||
         (BuildDisaDiffDpfsLvl2Cache(NULL, &diff_info, lvl2_cache, diff_info.size_dpfs_lvl2) != 0)) {
         DeinitVTickDbDrive();
@@ -138,8 +138,11 @@ u64 InitVTickDbDrive(void) { // prerequisite: ticket.db mounted as image
     }
     
     ScanTickDb(false, true);
-    if (!tick_info->n_entries) DeinitVTickDbDrive();
-    return (tick_info->n_entries) ? SYS_TICKDB : 0;
+    
+    if (!tick_info->n_entries)
+        DeinitVTickDbDrive();
+    
+    return tick_info ? SYS_TICKDB : 0;
 }
 
 u64 CheckVTickDbDrive(void) {
@@ -149,6 +152,9 @@ u64 CheckVTickDbDrive(void) {
 }
 
 bool ReadVTickDbDir(VirtualFile* vfile, VirtualDir* vdir) {
+    if (!tick_info)
+        return false;
+
     if (vdir->flags & VFLAG_TICKDIR) { // ticket dir
         // raw scan required?
         if ((vdir->flags & VFLAG_HIDDEN) && !scanned_raw) {

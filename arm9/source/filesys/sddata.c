@@ -11,14 +11,14 @@ typedef struct {
     FIL* fptr;
     u8 ctr[16];
     u8 keyy[16];
-} __attribute__((packed)) FilCryptInfo;
+} PACKED_STRUCT FilCryptInfo;
 
 static FilCryptInfo filcrypt[NUM_FILCRYPTINFO] = { 0 };
 
 char alias_drv[NUM_ALIAS_DRV]; // 1 char ASCII drive number of the alias drive / 0x00 if unused
 char alias_path[NUM_ALIAS_DRV][128]; // full path to resolve the alias into
 
-u8 sd_keyy[NUM_ALIAS_DRV][16]; // key Y belonging to alias drive
+u8 sd_keyy[NUM_ALIAS_DRV][16] __attribute__((aligned(4))); // key Y belonging to alias drive
 
 int alias_num (const TCHAR* path) {
     int num = -1;
@@ -34,8 +34,9 @@ int alias_num (const TCHAR* path) {
 
 void dealias_path (TCHAR* alias, const TCHAR* path) {
     int num = alias_num(path);
+    u32 p_offs = (path[2] == '/' && ((path[3] == '/') || (path[3] == '\0'))) ? 3 : 2;
     if (num >= 0) // set alias (alias is assumed to be 256 byte)
-        snprintf(alias, 256, "%s%s", alias_path[num], path + 2);
+        snprintf(alias, 256, "%s%s", alias_path[num], path + p_offs);
     else strncpy(alias, path, 256);
 }
 
@@ -152,7 +153,7 @@ FRESULT fx_open (FIL* fp, const TCHAR* path, BYTE mode) {
         } else {
             // get AES counter, see: http://www.3dbrew.org/wiki/Extdata#Encryption
             // path is the part of the full path after //Nintendo 3DS/<ID0>/<ID1>
-            u8 hashstr[256];
+            u8 hashstr[256] __attribute__((aligned(4)));
             u8 sha256sum[32];
             u32 plen = 0;
             // poor man's ASCII -> UTF-16 / uppercase -> lowercase

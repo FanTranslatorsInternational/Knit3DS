@@ -51,7 +51,7 @@ typedef struct {
     u8  unknown2[44];
     u8  magic[4]; // ".CAA"
     u8  unknown3[12];
-} __attribute__((packed)) AgbVcFooter;
+} PACKED_STRUCT AgbVcFooter;
 
 // see: http://3dbrew.org/wiki/3DS_Virtual_Console#NAND_Savegame
 typedef struct {
@@ -69,7 +69,7 @@ typedef struct {
     u32 unknown1; // has to do with ARM7?
     u32 unknown2; // has to do with ARM7?
     u8  reserved3[0x198]; // always 0xFF
-} __attribute__((packed)) AgbSaveHeader;
+} PACKED_STRUCT AgbSaveHeader;
 
 // see: http://problemkaputt.de/gbatek.htm#gbacartridgeheader
 typedef struct {
@@ -86,7 +86,7 @@ typedef struct {
     u8 checksum;     // header checksum, required
     u8 reserved[2];  // always 0x00
     // stuff for multiboot not included
-} __attribute__((packed)) AgbHeader;
+} __attribute__((packed, aligned(16))) AgbHeader;
 
 
 u32 ValidateAgbSaveHeader(AgbSaveHeader* header);

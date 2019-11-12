@@ -13,29 +13,32 @@
 u64 IdentifyFileType(const char* path) {
     const u8 romfs_magic[] = { ROMFS_MAGIC };
     const u8 diff_magic[] = { DIFF_MAGIC };
-    // const u8 disa_magic[] = { DISA_MAGIC };
+    const u8 disa_magic[] = { DISA_MAGIC };
     const u8 tickdb_magic[] = { TICKDB_MAGIC };
     const u8 smdh_magic[] = { SMDH_MAGIC };
     const u8 threedsx_magic[] = { THREEDSX_EXT_MAGIC };
     const u8 png_magic[] = { PNG_MAGIC };
-    
+
     if (!path) return 0; // safety
-    u8 header[0x200] __attribute__((aligned(32))); // minimum required size
+    u8 ALIGN(32) header[0x200]; // minimum required size
     void* data = (void*) header;
     size_t fsize = FileGetSize(path);
     char* fname = strrchr(path, '/');
     char* ext = (fname) ? strrchr(++fname, '.') : NULL;
     u32 id = 0;
-    
-    
+
     // block crappy "._" files from getting recognized as filetype
     if (!fname) return 0;
     if (strncmp(fname, "._", 2) == 0) return 0;
-    
-    if (ext) ext++;
+
+    if (ext) {
+        ext++;
+    } else {
+        ext = "";
+    }
     if (FileGetData(path, header, 0x200, 0) < min(0x200, fsize)) return 0;
     if (!fsize) return 0;
-    
+
     if (fsize >= 0x200) {
         if (ValidateNandNcsdHeader((NandNcsdHeader*) data) == 0) {
             return (fsize >= GetNandNcsdMinSizeSectors((NandNcsdHeader*) data) * 0x200) ?
@@ -53,7 +56,7 @@ u64 IdentifyFileType(const char* path) {
         } else if (ValidateCiaHeader((CiaHeader*) data) == 0) {
             // this only works because these functions ignore CIA content index
             CiaInfo info;
-            GetCiaInfo(&info, (CiaHeader*) header);
+            GetCiaInfo(&info, data);
             if (fsize >= info.size_cia)
                 return GAME_CIA; // CIA file
         } else if (ValidateNcsdHeader((NcsdHeader*) data) == 0) {
@@ -95,6 +98,8 @@ u64 IdentifyFileType(const char* path) {
             if (memcmp(header + 0x100, tickdb_magic, sizeof(tickdb_magic)) == 0) // ticket.db file
                 return SYS_DIFF | SYS_TICKDB; // ticket.db
             return SYS_DIFF;
+        } else if (memcmp(header + 0x100, disa_magic, sizeof(disa_magic)) == 0) { // DISA file
+            return SYS_DISA;
         } else if (memcmp(header, smdh_magic, sizeof(smdh_magic)) == 0) {
             return GAME_SMDH; // SMDH file
         } else if (ValidateTwlHeader((TwlHeader*) data) == 0) {
@@ -118,6 +123,9 @@ u64 IdentifyFileType(const char* path) {
     } else if ((fsize > sizeof(ThreedsxHeader)) &&
         (memcmp(data, threedsx_magic, sizeof(threedsx_magic)) == 0)) {
         return GAME_3DSX; // 3DSX (executable) file
+    } else if ((fsize > sizeof(CmdHeader)) &&
+        CheckCmdSize((CmdHeader*) data, fsize) == 0) {
+        return GAME_CMD; // CMD file
     } else if ((fsize > sizeof(NcchInfoHeader)) &&
         (GetNcchInfoVersion((NcchInfoHeader*) data)) &&
         (strncasecmp(fname, NCCHINFO_NAME, 32) == 0)) {
@@ -125,7 +133,7 @@ u64 IdentifyFileType(const char* path) {
     } else if ((strncasecmp(ext, "png", 4) == 0) &&
         (fsize > sizeof(png_magic)) && (memcmp(data, png_magic, sizeof(png_magic)) == 0)) {
         return GFX_PNG;
-    } else if (ext && ((strncasecmp(ext, "cdn", 4) == 0) || (strncasecmp(ext, "nus", 4) == 0))) {
+    } else if ((strncasecmp(ext, "cdn", 4) == 0) || (strncasecmp(ext, "nus", 4) == 0)) {
         char path_cetk[256];
         char* ext_cetk = path_cetk + (ext - path);
         strncpy(path_cetk, path, 256);
@@ -143,7 +151,7 @@ u64 IdentifyFileType(const char* path) {
         return BIN_LEGKEY; // legacy key file
     } else if (ValidateText((char*) data, (fsize > 0x200) ? 0x200 : fsize)) {
         u64 type = 0;
-        if ((fsize <= SCRIPT_MAX_SIZE) && ext && (strncasecmp(ext, SCRIPT_EXT, strnlen(SCRIPT_EXT, 16) + 1) == 0))
+        if ((fsize <= SCRIPT_MAX_SIZE) && (strncasecmp(ext, SCRIPT_EXT, strnlen(SCRIPT_EXT, 16) + 1) == 0))
             type |= TXT_SCRIPT; // should be a script (which is also generic text)
         if (fsize < STD_BUFFER_SIZE) type |= TXT_GENERIC;
         return type;

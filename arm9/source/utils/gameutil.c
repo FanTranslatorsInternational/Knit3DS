@@ -637,7 +637,7 @@ u32 VerifyFirmFile(const char* path) {
     // hash verify all available sections
     FirmHeader header;
     memcpy(&header, firm_buffer, sizeof(FirmHeader));
-   for (u32 i = 0; i < 4; i++) {
+    for (u32 i = 0; i < 4; i++) {
         FirmSectionHeader* sct = header.sections + i; 
         void* section = ((u8*) firm_buffer) + sct->offset;
         if (!(sct->size)) continue;
@@ -1322,7 +1322,7 @@ u32 BuildCiaFromTmdFileBuffered(const char* path_tmd, const char* path_cia, bool
                 {"Use personalized ticket (legit)", "Use generic ticket (not legit)"};
             if (!default_action) {
                 default_action = ShowSelectPrompt(2, optionstr,
-                    "ID %016llX\nLegit ticket is personalized.\nChoose default action:", getbe64(title_id));
+                    "ID %016llX\nLegit ticket is personalized.\nCIA may not be installable.\nChoose default action:", getbe64(title_id));
                 ShowProgress(0, 0, path_tmd);
             }
             if (!default_action) return 1;
@@ -1825,66 +1825,6 @@ u32 CompressCode(const char* path, const char* path_out) {
     return 0;
 }
 
-u32 ExtractDataFromDisaDiff(const char* path) {
-    char dest[256];
-    u32 ret = 0;
-    
-    // build output name
-    char* name = strrchr(path, '/');
-    if (!name) return 1;
-    snprintf(dest, 256, "%s/%s", OUTPUT_PATH, ++name);
-    
-    // replace extension
-    char* dot = strrchr(dest, '.');
-    if (!dot || (dot < strrchr(dest, '/')))
-        dot = dest + strnlen(dest, 256);
-    snprintf(dot, 16, ".%s", "bin");
-        
-    if (!CheckWritePermissions(dest)) return 1;
-    
-    // prepare DISA / DIFF read
-    DisaDiffReaderInfo info;
-    u8* lvl2_cache = NULL;
-    if ((GetDisaDiffReaderInfo(path, &info, false) != 0) ||
-        !(lvl2_cache = (u8*) malloc(info.size_dpfs_lvl2)) ||
-        (BuildDisaDiffDpfsLvl2Cache(path, &info, lvl2_cache, info.size_dpfs_lvl2) != 0)) {
-        if (lvl2_cache) free(lvl2_cache);
-        return 1;
-    }
-    
-    // prepare buffer
-    u8* buffer = (u8*) malloc(STD_BUFFER_SIZE);
-    if (!buffer) {
-        free(lvl2_cache);
-        return 1;
-    }
-    
-    // open output file
-    FIL file;
-    if (fvx_open(&file, dest, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
-        free(buffer);
-        free(lvl2_cache);
-        return 1;
-    }
-    
-    // actually extract the partition
-    u32 total_size = 0;
-    for (u32 i = 0; ret == 0; i += STD_BUFFER_SIZE) {
-        UINT btr;
-        u32 add_size = ReadDisaDiffIvfcLvl4(path, &info, i, STD_BUFFER_SIZE, buffer);
-        if (!add_size) break;
-        if ((fvx_write(&file, buffer, add_size, &btr) != FR_OK) || (btr != add_size)) ret = 1;
-        total_size += add_size;
-    }
-    
-    // wrap it up
-    if (!total_size) ret = 1;
-    free(buffer);
-    free(lvl2_cache);
-    fvx_close(&file);
-    return ret;
-}
-
 u64 GetGameFileTrimmedSize(const char* path) {
     u64 filetype = IdentifyFileType(path);
     u64 trimsize = 0;
@@ -1968,10 +1908,10 @@ u32 LoadSmdhFromGameFile(const char* path, Smdh* smdh) {
     return 1;
 }
 
-u32 ShowSmdhTitleInfo(Smdh* smdh) {
+u32 ShowSmdhTitleInfo(Smdh* smdh, u16* screen) {
     const u8 smdh_magic[] = { SMDH_MAGIC };
     const u32 lwrap = 24;
-    u8 icon[SMDH_SIZE_ICON_BIG];
+    u16 icon[SMDH_SIZE_ICON_BIG / sizeof(u16)];
     char desc_l[SMDH_SIZE_DESC_LONG+1];
     char desc_s[SMDH_SIZE_DESC_SHORT+1];
     char pub[SMDH_SIZE_PUBLISHER+1];
@@ -1984,60 +1924,62 @@ u32 ShowSmdhTitleInfo(Smdh* smdh) {
     WordWrapString(desc_l, lwrap);
     WordWrapString(desc_s, lwrap);
     WordWrapString(pub, lwrap);
-    ShowIconString(icon, SMDH_DIM_ICON_BIG, SMDH_DIM_ICON_BIG, "%s\n%s\n%s", desc_l, desc_s, pub);
-    while(!(InputWait(0) & (BUTTON_A | BUTTON_B)));
-    ClearScreenF(true, false, COLOR_STD_BG);
+    ShowIconStringF(screen, icon, SMDH_DIM_ICON_BIG, SMDH_DIM_ICON_BIG, "%s\n%s\n%s", desc_l, desc_s, pub);
     return 0;
 }
 
-u32 ShowTwlIconTitleInfo(TwlIconData* twl_icon) {
+u32 ShowTwlIconTitleInfo(TwlIconData* twl_icon, u16* screen) {
     const u32 lwrap = 24;
-    u8 icon[TWLICON_SIZE_ICON];
+    u16 icon[TWLICON_SIZE_ICON / sizeof(u16)];
     char desc[TWLICON_SIZE_DESC+1];
     if ((GetTwlIcon(icon, twl_icon) != 0) ||
         (GetTwlTitle(desc, twl_icon) != 0))
         return 1;
     WordWrapString(desc, lwrap);
-    ShowIconString(icon, TWLICON_DIM_ICON, TWLICON_DIM_ICON, "%s", desc);
-    while(!(InputWait(0) & (BUTTON_A | BUTTON_B)));
-    ClearScreenF(true, false, COLOR_STD_BG);
+    ShowIconStringF(screen, icon, TWLICON_DIM_ICON, TWLICON_DIM_ICON, "%s", desc);
     return 0;
 }
 
-u32 ShowGbaFileTitleInfo(const char* path) {
+u32 ShowGbaFileTitleInfo(const char* path, u16* screen) {
     AgbHeader agb;
     if ((fvx_qread(path, &agb, 0, sizeof(AgbHeader), NULL) != FR_OK) ||
         (ValidateAgbHeader(&agb) != 0)) return 1;
-    ShowString("%.12s (AGB-%.4s)\n%s", agb.game_title, agb.game_code, AGB_DESTSTR(agb.game_code));
-    while(!(InputWait(0) & (BUTTON_A | BUTTON_B)));
-    ClearScreenF(true, false, COLOR_STD_BG);
+    ShowStringF(screen, "%.12s (AGB-%.4s)\n%s", agb.game_title, agb.game_code, AGB_DESTSTR(agb.game_code));
     return 0;
-    
 }
 
-u32 ShowGameFileTitleInfo(const char* path) {
+u32 ShowGameFileTitleInfoF(const char* path, u16* screen, bool clear) {
     char path_content[256];
     u64 itype = IdentifyFileType(path); // initial type
     if (itype & GAME_TMD) {
         if (GetTmdContentPath(path_content, path) != 0) return 1;
         path = path_content;
     }
-    
+
     void* buffer = (void*) malloc(max(sizeof(Smdh), sizeof(TwlIconData)));
     Smdh* smdh = (Smdh*) buffer;
     TwlIconData* twl_icon = (TwlIconData*) buffer;
-    
+
     // try loading SMDH, then try NDS / GBA
     u32 ret = 1;
     if (LoadSmdhFromGameFile(path, smdh) == 0)
-        ret = ShowSmdhTitleInfo(smdh);
+        ret = ShowSmdhTitleInfo(smdh, screen);
     else if ((LoadTwlMetaData(path, NULL, twl_icon) == 0) ||
         ((itype & GAME_TAD) && (fvx_qread(path, twl_icon, TAD_BANNER_OFFSET, sizeof(TwlIconData), NULL) == FR_OK)))
-        ret = ShowTwlIconTitleInfo(twl_icon);
-    else ret = ShowGbaFileTitleInfo(path);
-    
+        ret = ShowTwlIconTitleInfo(twl_icon, screen);
+    else ret = ShowGbaFileTitleInfo(path, screen);
+
+    if (!ret && clear) {
+        while(!(InputWait(0) & (BUTTON_A | BUTTON_B)));
+        ClearScreen(screen, COLOR_STD_BG);
+    }
+
     free(buffer);
     return ret;
+}
+
+u32 ShowGameFileTitleInfo(const char* path) {
+    return ShowGameFileTitleInfoF(path, MAIN_SCREEN, true);
 }
 
 u32 ShowCiaCheckerInfo(const char* path) {
@@ -2088,7 +2030,8 @@ u32 ShowCiaCheckerInfo(const char* path) {
     	snprintf(typestr, 32, "Possibly Broken");
     else snprintf(typestr, 32, "%s %s%s",
     	console_id ? "Personal" : "Universal",
-    	(state_ticket == 2) ? "Legit" : (state_tmd == 2) ? "Pirate Legit" : "Custom",
+    	((state_ticket == 2) && (state_tmd == 2)) ? "Legit" :
+         (state_tmd == 2) ? "Pirate Legit" : "Custom",
     	is_dlc ? " DLC" : "");
 
     // output results
@@ -2402,7 +2345,7 @@ u32 BuildSeedInfo(const char* path, bool dump) {
     char path_str[128];
     if (path_in && (strnlen(path_in, 16) == 2)) { // when only a drive is given...
         // grab the key Y from movable.sed
-        u8 movable_keyy[16];
+        u8 movable_keyy[16] __attribute__((aligned(4)));
         snprintf(path_str, 128, "%s/private/movable.sed", path_in);
         if (fvx_qread(path_str, movable_keyy, 0x110, 0x10, NULL) != FR_OK)
             return 1;

@@ -1,7 +1,12 @@
 #include "godmode.h"
 #include "power.h"
 #include "pxi.h"
-#include "i2c.h"
+
+#include "arm.h"
+#include "shmem.h"
+
+#include "hid.h"
+
 
 void main(int argc, char** argv, int entrypoint)
 {
@@ -9,13 +14,17 @@ void main(int argc, char** argv, int entrypoint)
     (void) argv;
 
     PXI_Reset();
-    I2C_init();
 
-    // Wait for ARM11
-    PXI_WaitRemote(PXI_READY);
+    // Don't even try to send any messages until the
+    // ARM11 says it's ready
+    PXI_Barrier(ARM11_READY_BARRIER);
 
-    PXI_DoCMD(PXI_SCREENINIT, NULL, 0);
-    I2C_writeReg(I2C_DEV_MCU, 0x22, 0x2A);
+    // Set screens to RGB16 mode
+    PXI_DoCMD(PXI_SET_VMODE, (u32[]){0}, 1);
+
+    // A pointer to the shared memory region is
+    // stored in the thread ID register in the ARM9
+    ARM_InitSHMEM();
 
     #ifdef SCRIPT_RUNNER
     // Run the script runner

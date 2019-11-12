@@ -46,7 +46,7 @@ int DriveType(const char* path) {
             type = DRV_VIRTUAL | DRV_SYSNAND;
         } else if (vsrc == VRT_EMUNAND) {
             type = DRV_VIRTUAL | DRV_EMUNAND;
-        } else if (vsrc == VRT_IMGNAND) {
+        } else if ((vsrc == VRT_IMGNAND) || (vsrc == VRT_DISADIFF)) {
             type = DRV_VIRTUAL | DRV_IMAGE;
         } else if (vsrc == VRT_XORPAD) {
             type = DRV_VIRTUAL | DRV_XORPAD;
@@ -83,15 +83,15 @@ bool GetRootDirContentsWorker(DirStruct* contents) {
     static const char* drvnum[] = { FS_DRVNUM };
     u32 n_entries = 0;
     
-    char sdlabel[16];
-    if (!GetFATVolumeLabel("0:", sdlabel))
-        snprintf(sdlabel, 16, "NOLABEL");
+    char sdlabel[DRV_LABEL_LEN];
+    if (!GetFATVolumeLabel("0:", sdlabel) || !(*sdlabel))
+        strcpy(sdlabel, "NOLABEL");
 
     char carttype[16];
     GetVCartTypeString(carttype);
     
     // virtual root objects hacked in
-    for (u32 i = 0; (i < NORM_FS+VIRT_FS) && (n_entries < MAX_DIR_ENTRIES); i++) {
+    for (u32 i = 0; (i < countof(drvnum)) && (n_entries < MAX_DIR_ENTRIES); i++) {
         DirEntry* entry = &(contents->entry[n_entries]);
         if (!DriveType(drvnum[i])) continue; // drive not available
         entry->p_name = 4;
